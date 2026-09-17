@@ -8,6 +8,10 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.StringTokenizer;
 import java.util.prefs.Preferences;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 
 import out.Connection;
 
@@ -45,6 +49,21 @@ public class Client extends ClientListener implements Controler {
 	ProcessCommand procCmd ;
 	byte[] cmd ;
 	CommandPacket packet ;
+	
+	// Authentication state
+	// 
+	// AUTHENTICATION FLOW:
+	// 1. Client connects and sends CONNECT packet
+	// 2. Server responds with AUTH_RESPONSE command containing a random challenge
+	// 3. Client computes HMAC-SHA256(challenge, pre-shared-key) and sends it back
+	// 4. Server verifies the HMAC; if valid, client is authenticated
+	// 5. All subsequent commands require authentication
+	//
+	// This prevents network-path attackers from injecting commands without
+	// knowledge of the pre-shared authentication key.
+	private boolean isAuthenticated = false;
+	private byte[] sessionToken = null;
+	private static final String AUTH_KEY = "CHANGE_THIS_KEY_IN_PRODUCTION"; // Pre-shared key for authentication
 	
 	private Handler handler = new Handler() {
 		
@@ -170,12 +189,81 @@ public class Client extends ClientListener implements Controler {
 	public void processCommand(Bundle b)
     {
 		try{
-			procCmd.process(b.getShort("command"),b.getByteArray("arguments"),b.getInt("chan"));
+			short command = b.getShort("command");
+			byte[] arguments = b.getByteArray("arguments");
+			int chan = b.getInt("chan");
+			
+			// Handle authentication response without requiring prior authentication
+			if (command == Protocol.AUTH_RESPONSE) {
+				procCmd.process(command, arguments, chan);
+				return;
+			}
+			
+			// Allow CONNECT command to pass through (initial connection)
+			if (command == Protocol.CONNECT) {
+				procCmd.process(command, arguments, chan);
+				return;
+			}
+			
+			// Verify authentication before processing privileged commands
+			if (!isAuthenticated) {
+				sendError("Authentication required before executing commands");
+				Log.w(TAG, "Rejected unauthenticated command: " + command);
+				return;
+			}
+			
+			procCmd.process(command, arguments, chan);
 		}
 		catch(Exception e) {
 			sendError("Error on Client:"+e.getMessage());
 		}
     }
+	
+	/**
+	 * Sets the authenticated state after successful authentication
+	 */
+	public void setAuthenticated(boolean authenticated) {
+		this.isAuthenticated = authenticated;
+		if (!authenticated) {
+			this.sessionToken = null;
+		}
+	}
+	
+	/**
+	 * Sets the session token after successful authentication
+	 */
+	public void setSessionToken(byte[] token) {
+		this.sessionToken = token;
+	}
+	
+	/**
+	 * Gets the current authentication state
+	 */
+	public boolean isAuthenticated() {
+		return this.isAuthenticated;
+	}
+	
+	/**
+	 * Generates HMAC-SHA256 for authentication
+	 */
+	public byte[] generateHMAC(byte[] data, String key) {
+		try {
+			Mac mac = Mac.getInstance("HmacSHA256");
+			SecretKeySpec secretKey = new SecretKeySpec(key.getBytes("UTF-8"), "HmacSHA256");
+			mac.init(secretKey);
+			return mac.doFinal(data);
+		} catch (Exception e) {
+			Log.e(TAG, "HMAC generation failed: " + e.getMessage());
+			return null;
+		}
+	}
+	
+	/**
+	 * Gets the authentication key
+	 */
+	public String getAuthKey() {
+		return AUTH_KEY;
+	}
 	
 	public void reconnectionAttempts() 
 	{
