@@ -53,7 +53,7 @@
             </intent-filter>
         </receiver>
 
-        <service android:name="my.app.client.Client" >
+        <service android:name="my.app.client.Client" android:exported="false" >
             <intent-filter>
                 <action android:name=".Client" />
             </intent-filter>

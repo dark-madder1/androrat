@@ -74,10 +74,44 @@ public class Client extends ClientListener implements Controler {
 		String who = intent.getAction();
 		Log.i(TAG, "onStartCommand by: "+ who); //On affiche qui a déclenché l'event
 		
-		if (intent.hasExtra("IP"))
-			this.ip = intent.getExtras().getString("IP");
-		if (intent.hasExtra("PORT"))
-			this.port = intent.getExtras().getInt("PORT");		
+		// Security: Reject external Intent extras to prevent connection redirection.
+		// Only accept IP/PORT from trusted internal components (same package).
+		// External apps cannot start this service due to android:exported="false",
+		// but this provides defense-in-depth against configuration injection.
+		if (intent.hasExtra("IP") || intent.hasExtra("PORT")) {
+			String callingPackage = null;
+			try {
+				// Attempt to identify the caller
+				int callingUid = android.os.Binder.getCallingUid();
+				String[] packages = getPackageManager().getPackagesForUid(callingUid);
+				if (packages != null && packages.length > 0) {
+					callingPackage = packages[0];
+				}
+			} catch (Exception e) {
+				Log.w(TAG, "Unable to determine calling package", e);
+			}
+			
+			// Only accept IP/PORT from our own package or system
+			boolean isTrustedCaller = false;
+			if (callingPackage != null && callingPackage.equals(getPackageName())) {
+				isTrustedCaller = true;
+			}
+			// Also check if the intent component is explicitly set to our service
+			if (intent.getComponent() != null && 
+			    intent.getComponent().getPackageName().equals(getPackageName())) {
+				isTrustedCaller = true;
+			}
+			
+			if (isTrustedCaller) {
+				if (intent.hasExtra("IP"))
+					this.ip = intent.getExtras().getString("IP");
+				if (intent.hasExtra("PORT"))
+					this.port = intent.getExtras().getInt("PORT");
+			} else {
+				Log.w(TAG, "Rejected IP/PORT configuration from untrusted source: " + callingPackage);
+				// Do not accept the extras, use configured values from preferences
+			}
+		}
 		
 		if(!isRunning) {// C'est la première fois qu'on le lance
 			
