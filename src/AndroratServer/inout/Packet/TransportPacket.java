@@ -56,6 +56,17 @@ public class TransportPacket implements Packet {
 		totalLength = buffer.getInt();
 		localLength = buffer.getInt();
 
+		// Validate lengths to prevent resource exhaustion attacks
+		if (totalLength < 0 || totalLength > Protocol.MAX_TOTAL_DATA_LENGTH) {
+			throw new Exception("Invalid totalLength: " + totalLength + " (must be 0-" + Protocol.MAX_TOTAL_DATA_LENGTH + ")");
+		}
+		if (localLength < 0 || localLength > Protocol.MAX_TRANSPORT_LENGTH) {
+			throw new Exception("Invalid localLength: " + localLength + " (must be 0-" + Protocol.MAX_TRANSPORT_LENGTH + ")");
+		}
+		if (localLength > totalLength) {
+			throw new Exception("Invalid packet: localLength (" + localLength + ") exceeds totalLength (" + totalLength + ")");
+		}
+
 		byte lst = buffer.get();
 		if (lst == 1)
 			last = true;

@@ -67,6 +67,19 @@ public class TemporaryStorage
         	//System.out.println("on rajoute des donn�es attendues");
 
         	total_length = packet.getTotalLength();
+        	
+        	// Validate total_length to prevent resource exhaustion attacks
+        	if (total_length < 0 || total_length > Protocol.MAX_TOTAL_DATA_LENGTH) {
+        		System.err.println("Invalid total_length in packet: " + total_length);
+        		return Protocol.SIZE_ERROR;
+        	}
+        	
+        	// Validate accumulated size doesn't exceed total_length
+        	if (size_counter + packet.getLocalLength() > total_length) {
+        		System.err.println("Accumulated size would exceed total_length");
+        		return Protocol.SIZE_ERROR;
+        	}
+        	
 			end = packet.isLast();
 			size_counter+= packet.getLocalLength();
 			data_temp.add(packet.getData());

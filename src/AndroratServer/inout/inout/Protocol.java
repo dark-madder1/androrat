@@ -6,6 +6,8 @@ public class Protocol {
 	
 	public final static int HEADER_LENGTH_DATA = 15;
 	public final static int MAX_PACKET_SIZE = 2048;
+	public final static int MAX_TRANSPORT_LENGTH = 100 * 1024 * 1024; // 100 MB maximum per transport packet
+	public final static int MAX_TOTAL_DATA_LENGTH = 500 * 1024 * 1024; // 500 MB maximum for reassembled data
 	
 	public final static int PACKET_LOST = 0 ;
 	public final static int NO_MORE = 1;
