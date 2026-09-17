@@ -1,0 +1,71 @@
+ANDRORAT SERVER - SSL/TLS QUICK START
+======================================
+
+IMPORTANT SECURITY UPDATE
+-------------------------
+This version of Androrat now uses SSL/TLS encryption by default to protect
+communications from interception and tampering. You MUST configure SSL/TLS
+before the server will accept connections.
+
+QUICK SETUP (5 minutes)
+-----------------------
+
+Step 1: Generate SSL Certificate
+---------------------------------
+Run the appropriate setup script for your platform:
+
+  Linux/Mac:    ./ssl-setup.sh
+  Windows:      ssl-setup.bat
+
+This creates a keystore.jks file with a self-signed certificate.
+
+Step 2: Start the Server
+-------------------------
+  java -jar AndroratServer.jar
+
+The server will automatically use the keystore.jks file in the current directory.
+
+Step 3: Configure Clients
+--------------------------
+Clients must be configured with the server's certificate to establish trust.
+See SSL-TLS-GUIDE.txt for detailed instructions on client configuration.
+
+TROUBLESHOOTING
+---------------
+
+Problem: "SSL/TLS initialization failed"
+Solution: Ensure keystore.jks exists and is readable. Check the password is correct.
+
+Problem: "Client connection refused"
+Solution: Clients need the server certificate in their truststore. See the guide.
+
+Problem: "Certificate expired"
+Solution: Generate a new certificate using the setup script.
+
+PRODUCTION DEPLOYMENT
+---------------------
+Self-signed certificates are suitable for testing only. For production:
+1. Obtain a certificate from a trusted Certificate Authority
+2. Use a strong keystore password (not the default "changeit")
+3. Protect the keystore file (chmod 600 on Linux)
+4. Enable client authentication
+5. Monitor logs for security events
+
+See SSL-TLS-GUIDE.txt for complete production deployment instructions.
+
+DISABLING SSL/TLS (NOT RECOMMENDED)
+------------------------------------
+If you must disable SSL/TLS for testing:
+
+  java -Dandrorat.ssl.enabled=false -jar AndroratServer.jar
+
+WARNING: This leaves your communications vulnerable to interception and
+tampering. Only use this for isolated testing environments.
+
+SUPPORT
+-------
+For detailed documentation, see:
+- SSL-TLS-GUIDE.txt (comprehensive SSL/TLS documentation)
+- config-example.txt (configuration examples)
+
+For security issues, please report them responsibly.

