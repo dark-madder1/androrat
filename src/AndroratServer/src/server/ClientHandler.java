@@ -9,6 +9,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
 import java.nio.ByteBuffer;
+import java.util.concurrent.Semaphore;
 
 import out.Mux;
 import Packet.CommandPacket;
@@ -24,8 +25,9 @@ public class ClientHandler extends Thread {
 	private ByteBuffer buffer;
 	private boolean connected;
 	private GUI mainGUI;
+	private Semaphore connectionSemaphore;
 
-	public ClientHandler(Socket your_socket, String id, Server s, GUI mainGUI)
+	public ClientHandler(Socket your_socket, String id, Server s, GUI mainGUI, Semaphore semaphore)
 			throws IOException {
 		this.mainGUI = mainGUI;
 		server = s;
@@ -37,12 +39,14 @@ public class ClientHandler extends Thread {
 		connected = true;
 		buffer = ByteBuffer.allocate(Protocol.MAX_PACKET_SIZE);
 		buffer.clear();
+		this.connectionSemaphore = semaphore;
 
 	}
 
 	// attend des donn�es du Receiver et les transmet au Demultiplexeur
 	public void run() {
-		while (connected) {
+		try {
+			while (connected) {
 
 			try {
 				
@@ -91,7 +95,13 @@ public class ClientHandler extends Thread {
 				}
 			}
 		}
-		server.DeleteClientHandler(imei);
+		} finally {
+			// Security: Always release the connection permit when handler exits
+			if (connectionSemaphore != null) {
+				connectionSemaphore.release();
+			}
+			server.DeleteClientHandler(imei);
+		}
 	}
 
 	// transmet les donn�es � envoyer au Multiplexeur
