@@ -28,8 +28,13 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
 import java.util.HashMap;
 import java.util.Scanner;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.Semaphore;
 
 import javax.swing.UIManager;
 
@@ -59,6 +64,13 @@ public class Server implements Controler {
 
 	private HashMap<String, ClientHandler> clientMap;
 	private HashMap<String, ChannelDistributionHandler> channelHandlerMap;
+	
+	// Security: Resource exhaustion mitigation
+	private static final int MAX_CONCURRENT_CONNECTIONS = 100;
+	private static final int SOCKET_TIMEOUT_MS = 30000; // 30 seconds
+	private static final int MAX_THREAD_POOL_SIZE = 100;
+	private final Semaphore connectionSemaphore;
+	private final ExecutorService clientExecutor;
 
 	public Server(int port) {
 		if(port == 0) {
@@ -74,6 +86,10 @@ public class Server implements Controler {
 		serverPort = port;
 		clientMap = new HashMap<String, ClientHandler>();
 		channelHandlerMap = new HashMap<String, ChannelDistributionHandler>();
+		
+		// Initialize security controls
+		connectionSemaphore = new Semaphore(MAX_CONCURRENT_CONNECTIONS, true);
+		clientExecutor = Executors.newFixedThreadPool(MAX_THREAD_POOL_SIZE);
 
 		gui = new GUI(this, serverPort);
 		//gui.addUser("coucou", null, null, null, null, null, null);
@@ -106,26 +122,85 @@ public class Server implements Controler {
 	public void setOnline() {
 		while (online) {
 			gui.logTxt("SERVER online, awaiting for a client...");
+			Socket cs = null;
 			try {
+				// Security: Enforce connection limit before accepting
+				if (!connectionSemaphore.tryAcquire()) {
+					gui.logErrTxt("SECURITY: Maximum concurrent connections reached. Rejecting new connection.");
+					// Accept and immediately close to prevent SYN flood backlog buildup
+					cs = serverSocket.accept();
+					cs.close();
+					continue;
+				}
 
-				Socket cs = serverSocket.accept();
+				cs = serverSocket.accept();
+				
+				// Security: Set socket timeout to prevent indefinite blocking on idle connections
+				try {
+					cs.setSoTimeout(SOCKET_TIMEOUT_MS);
+				} catch (SocketException e) {
+					gui.logErrTxt("ERROR: Failed to set socket timeout");
+					cs.close();
+					connectionSemaphore.release();
+					continue;
+				}
 
 				// inscription temporaire d'un client connecte
 				String id = Nclient + "client";
-				ClientHandler newCH = new ClientHandler(cs, id, this, gui);
-				clientMap.put(id, newCH);
-				channelHandlerMap.put(id, new ChannelDistributionHandler());
-
-				newCH.start();
-				// System.out.println("client accept�");
-				gui.logTxt("Connection established,temporary IMEI was assigned: " + id);
+				Nclient++;
+				
+				// Security: Use bounded thread pool instead of unbounded thread creation
+				final Socket clientSocket = cs;
+				final String clientId = id;
+				try {
+					clientExecutor.execute(new Runnable() {
+						@Override
+						public void run() {
+							ClientHandler newCH = null;
+							try {
+								newCH = new ClientHandler(clientSocket, clientId, Server.this, gui, connectionSemaphore);
+								synchronized (clientMap) {
+									clientMap.put(clientId, newCH);
+								}
+								synchronized (channelHandlerMap) {
+									channelHandlerMap.put(clientId, new ChannelDistributionHandler());
+								}
+								gui.logTxt("Connection established, temporary IMEI was assigned: " + clientId);
+								
+								// Run the client handler in the current thread pool thread
+								newCH.run();
+							} catch (IOException e) {
+								gui.logErrTxt("ERROR while establishing a connection: " + e.getMessage());
+								connectionSemaphore.release();
+								try {
+									clientSocket.close();
+								} catch (IOException ex) {
+									// Ignore close errors
+								}
+							}
+						}
+					});
+				} catch (RejectedExecutionException e) {
+					gui.logErrTxt("SECURITY: Thread pool exhausted. Rejecting connection.");
+					cs.close();
+					connectionSemaphore.release();
+				}
 
 			} catch (IOException e) {
 				// e.printStackTrace();
 				gui.logErrTxt("ERROR while establishing a connection");
+				if (cs != null) {
+					try {
+						cs.close();
+					} catch (IOException ex) {
+						// Ignore close errors
+					}
+				}
 			}
 		}
 		
+		// Cleanup on shutdown
+		clientExecutor.shutdown();
 		gui.logTxt("*** SERVER STOPPED ***\n");
 	}
 	
