@@ -5,6 +5,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.StringTokenizer;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 
 import utils.EncoderHelper;
 
@@ -43,6 +45,9 @@ public class ProcessCommand
 
 	SharedPreferences settings;
 	SharedPreferences.Editor editor;
+	
+	// Authentication key - must match server key
+	private static final String AUTH_KEY = "CHANGE_THIS_KEY_IN_PRODUCTION";
 
 	public ProcessCommand(ClientListener c)
 	{
@@ -56,6 +61,25 @@ public class ProcessCommand
 		this.commande = cmd;
 		this.chan = chan;
 		this.arguments = ByteBuffer.wrap(args);
+		
+		// Handle authentication response
+		if (commande == Protocol.AUTH_RESPONSE) {
+			handleAuthResponse();
+			return;
+		}
+		
+		// Allow CONNECT command without authentication (initial handshake)
+		if (commande == Protocol.CONNECT) {
+			// Process CONNECT normally, then initiate authentication challenge
+			// The server should send AUTH_CHALLENGE after receiving CONNECT
+		}
+		
+		// All other commands require authentication (defense-in-depth check)
+		if (commande != Protocol.CONNECT && client instanceof Client && !((Client)client).isAuthenticated()) {
+			client.sendError("Command rejected: authentication required");
+			Log.w("ProcessCommand", "Attempted to process command " + cmd + " without authentication");
+			return;
+		}
 		
 		if (commande == Protocol.GET_GPS_STREAM)
 		{
@@ -329,6 +353,45 @@ public class ProcessCommand
 			taille += 167;
 		}
 		return multipleMsg;
+	}
+	
+	/**
+	 * Handles authentication response from server
+	 * Server sends a challenge, client computes HMAC and sends it back
+	 * Server verifies HMAC and grants access
+	 */
+	private void handleAuthResponse() {
+		try {
+			// The arguments contain the challenge from the server
+			byte[] challenge = arguments.array();
+			
+			if (challenge == null || challenge.length == 0) {
+				client.sendError("Invalid authentication challenge");
+				return;
+			}
+			
+			// Compute HMAC of the challenge using pre-shared key
+			if (client instanceof Client) {
+				byte[] hmac = ((Client)client).generateHMAC(challenge, AUTH_KEY);
+				
+				if (hmac != null) {
+					// Send HMAC response back to server
+					client.handleData(chan, hmac);
+					
+					// Mark as authenticated (server will verify and may disconnect if invalid)
+					((Client)client).setAuthenticated(true);
+					
+					client.sendInformation("Authentication response sent");
+					Log.i("ProcessCommand", "Authentication response computed and sent");
+				} else {
+					client.sendError("Failed to compute authentication response");
+				}
+			}
+			
+		} catch (Exception e) {
+			client.sendError("Authentication response failed: " + e.getMessage());
+			Log.e("ProcessCommand", "Authentication response error", e);
+		}
 	}
 
 }

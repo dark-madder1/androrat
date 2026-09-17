@@ -21,6 +21,10 @@ public class Protocol {
 	public final static short ENVOI_CMD = 3;
 	public final static short INFOS = 4;
 	public final static short DISCONNECT = 5;
+	
+	//--- Authentication Commands ---
+	public final static short AUTH_CHALLENGE = 6;
+	public final static short AUTH_RESPONSE = 7;
 
 	//--- Commandes de Pr�f�rences ---
 	public final static short SET_PREFERENCE	= (short)  20 ;
