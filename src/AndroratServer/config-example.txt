@@ -1,0 +1,32 @@
+# Androrat Server Configuration Example
+# 
+# This file shows example system properties for configuring SSL/TLS.
+# These properties can be passed to the JVM using -D flags.
+
+# Example 1: Run with default SSL/TLS settings (keystore.jks in current directory)
+# java -jar AndroratServer.jar
+
+# Example 2: Specify custom keystore location and password
+# java -Dandrorat.keystore.path=/path/to/keystore.jks \
+#      -Dandrorat.keystore.password=mySecurePassword \
+#      -jar AndroratServer.jar
+
+# Example 3: Disable SSL/TLS (NOT RECOMMENDED - only for testing)
+# java -Dandrorat.ssl.enabled=false -jar AndroratServer.jar
+
+# Configuration Properties:
+# -------------------------
+# androrat.ssl.enabled          - Enable/disable SSL/TLS (default: true)
+# androrat.keystore.path        - Path to keystore file (default: keystore.jks)
+# androrat.keystore.password    - Keystore password (default: changeit)
+
+# Security Recommendations:
+# -------------------------
+# 1. Always use SSL/TLS in production (androrat.ssl.enabled=true)
+# 2. Use a strong keystore password (not the default "changeit")
+# 3. Protect the keystore file with appropriate file permissions
+# 4. Use certificates from a trusted Certificate Authority for production
+# 5. Regularly update and renew certificates before expiration
+# 6. Monitor server logs for SSL/TLS handshake failures
+
+# For more information, see SSL-TLS-GUIDE.txt

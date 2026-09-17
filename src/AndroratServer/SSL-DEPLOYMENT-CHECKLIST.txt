@@ -1,0 +1,129 @@
+SSL/TLS DEPLOYMENT CHECKLIST
+=============================
+
+Use this checklist to ensure proper SSL/TLS deployment.
+
+PRE-DEPLOYMENT
+--------------
+[ ] Read SSL-TLS-GUIDE.txt completely
+[ ] Read QUICKSTART-SSL.txt for basic setup
+[ ] Understand security implications of SSL/TLS
+[ ] Plan certificate management strategy
+[ ] Identify all clients that need updating
+
+CERTIFICATE GENERATION
+----------------------
+[ ] Run ssl-setup.sh (Linux/Mac) or ssl-setup.bat (Windows)
+[ ] Verify keystore.jks file was created
+[ ] Record keystore password securely
+[ ] Set appropriate file permissions (chmod 600 keystore.jks on Linux)
+[ ] Backup keystore file to secure location
+[ ] For production: Obtain certificate from trusted CA
+
+SERVER CONFIGURATION
+--------------------
+[ ] Place keystore.jks in server directory
+[ ] Test server startup with SSL enabled
+[ ] Verify "SSL/TLS enabled" message in logs
+[ ] Check no SSL/TLS error messages appear
+[ ] Confirm server is listening on correct port
+[ ] Test server accepts SSL connections
+
+CLIENT CONFIGURATION
+--------------------
+[ ] Export server certificate from keystore
+[ ] Convert certificate to client-compatible format
+[ ] Generate client certificates for mutual authentication
+[ ] Import client certificates into server truststore
+[ ] Update client code to use SSL/TLS
+[ ] Configure client truststore with server certificate
+[ ] Test client connection to server
+
+SECURITY VERIFICATION
+---------------------
+[ ] Verify TLS 1.2 or 1.3 is being used
+[ ] Confirm strong cipher suites are active
+[ ] Test that plain connections are rejected
+[ ] Verify client authentication is enforced
+[ ] Test with invalid client certificate (should fail)
+[ ] Test with expired certificate (should fail)
+[ ] Capture network traffic to verify encryption
+
+PRODUCTION DEPLOYMENT
+---------------------
+[ ] Use certificates from trusted CA (not self-signed)
+[ ] Change default keystore password
+[ ] Document certificate expiration dates
+[ ] Set up certificate renewal process
+[ ] Configure monitoring for SSL/TLS errors
+[ ] Test failover scenarios
+[ ] Document rollback procedure
+[ ] Train operations team on SSL/TLS management
+
+POST-DEPLOYMENT
+---------------
+[ ] Monitor server logs for SSL/TLS errors
+[ ] Verify all clients connected successfully
+[ ] Check for certificate validation errors
+[ ] Monitor performance impact
+[ ] Document any issues encountered
+[ ] Update runbooks with SSL/TLS procedures
+
+ONGOING MAINTENANCE
+-------------------
+[ ] Monitor certificate expiration dates
+[ ] Renew certificates before expiration
+[ ] Keep keystore backups current
+[ ] Review security logs regularly
+[ ] Update cipher suites as needed
+[ ] Test disaster recovery procedures
+[ ] Keep documentation updated
+
+TROUBLESHOOTING CHECKLIST
+--------------------------
+If connections fail:
+[ ] Check keystore file exists and is readable
+[ ] Verify keystore password is correct
+[ ] Confirm certificate hasn't expired
+[ ] Check client has server certificate
+[ ] Verify client certificate is in server truststore
+[ ] Review server logs for specific errors
+[ ] Test with SSL debugging enabled (-Djavax.net.debug=ssl)
+[ ] Verify firewall allows SSL/TLS traffic
+[ ] Check system time is synchronized (affects certificate validation)
+
+SECURITY AUDIT CHECKLIST
+-------------------------
+[ ] Verify SSL/TLS is enabled (not disabled)
+[ ] Confirm strong cipher suites only
+[ ] Check TLS 1.2/1.3 only (no older protocols)
+[ ] Verify client authentication is required
+[ ] Confirm certificates are from trusted CA
+[ ] Check keystore file permissions
+[ ] Verify keystore password is not default
+[ ] Review certificate chain completeness
+[ ] Check for certificate revocation
+[ ] Verify no security warnings in logs
+
+EMERGENCY PROCEDURES
+--------------------
+If SSL/TLS must be temporarily disabled:
+[ ] Document reason for disabling
+[ ] Get approval from security team
+[ ] Set -Dandrorat.ssl.enabled=false
+[ ] Add network-level security controls
+[ ] Monitor for security incidents
+[ ] Re-enable SSL/TLS as soon as possible
+[ ] Review logs for suspicious activity
+
+COMPLIANCE VERIFICATION
+-----------------------
+[ ] Document SSL/TLS configuration
+[ ] Record cipher suites in use
+[ ] Document certificate management procedures
+[ ] Maintain certificate inventory
+[ ] Keep audit logs of SSL/TLS changes
+[ ] Review against security policies
+[ ] Prepare for security audits
+
+For detailed information on any item, refer to SSL-TLS-GUIDE.txt
