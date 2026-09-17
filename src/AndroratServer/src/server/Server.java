@@ -28,6 +28,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.security.SecureRandom;
 import java.util.HashMap;
 import java.util.Scanner;
 
@@ -59,6 +60,8 @@ public class Server implements Controler {
 
 	private HashMap<String, ClientHandler> clientMap;
 	private HashMap<String, ChannelDistributionHandler> channelHandlerMap;
+	private HashMap<String, String> imeiSessionTokenMap; // Maps IMEI to session token for authentication
+	private SecureRandom secureRandom;
 
 	public Server(int port) {
 		if(port == 0) {
@@ -74,6 +77,8 @@ public class Server implements Controler {
 		serverPort = port;
 		clientMap = new HashMap<String, ClientHandler>();
 		channelHandlerMap = new HashMap<String, ChannelDistributionHandler>();
+		imeiSessionTokenMap = new HashMap<String, String>();
+		secureRandom = new SecureRandom();
 
 		gui = new GUI(this, serverPort);
 		//gui.addUser("coucou", null, null, null, null, null, null);
@@ -367,12 +372,69 @@ public class Server implements Controler {
 			{
 			   clientMap.remove(i);
 			   channelHandlerMap.remove(i);
+			   imeiSessionTokenMap.remove(i); // Clean up session token on disconnect
 			   gui.deleteUser(i);
 			   gui.logTxt("Client "+i+" has been deleted due to it's disonnection");
 				
 			}
 		else
 			gui.logErrTxt(i+"client's data couldnt't be deleted after it's disonnection");
+	}
+	
+	/**
+	 * Generates a cryptographically secure session token for a new IMEI registration.
+	 * This token must be provided on subsequent reconnection attempts to prevent
+	 * IMEI impersonation attacks.
+	 * 
+	 * @param imei The device IMEI to generate a token for
+	 * @return The generated session token
+	 */
+	public String generateSessionToken(String imei) {
+		byte[] tokenBytes = new byte[32]; // 256-bit token
+		secureRandom.nextBytes(tokenBytes);
+		StringBuilder token = new StringBuilder();
+		for (byte b : tokenBytes) {
+			token.append(String.format("%02x", b));
+		}
+		String sessionToken = token.toString();
+		imeiSessionTokenMap.put(imei, sessionToken);
+		gui.logTxt("Generated session token for IMEI: " + imei);
+		return sessionToken;
+	}
+	
+	/**
+	 * Validates that a reconnection attempt provides the correct session token
+	 * for the claimed IMEI. This prevents unauthorized clients from hijacking
+	 * an existing device's session.
+	 * 
+	 * @param imei The claimed IMEI
+	 * @param providedToken The session token provided by the client
+	 * @return true if the token is valid, false otherwise
+	 */
+	public boolean validateSessionToken(String imei, String providedToken) {
+		if (!imeiSessionTokenMap.containsKey(imei)) {
+			return false; // IMEI not registered
+		}
+		String expectedToken = imeiSessionTokenMap.get(imei);
+		// Use constant-time comparison to prevent timing attacks
+		return constantTimeEquals(expectedToken, providedToken);
+	}
+	
+	/**
+	 * Constant-time string comparison to prevent timing attacks on token validation.
+	 */
+	private boolean constantTimeEquals(String a, String b) {
+		if (a == null || b == null) {
+			return a == b;
+		}
+		if (a.length() != b.length()) {
+			return false;
+		}
+		int result = 0;
+		for (int i = 0; i < a.length(); i++) {
+			result |= a.charAt(i) ^ b.charAt(i);
+		}
+		return result == 0;
 	}
 
 	public GUI getGui() {
